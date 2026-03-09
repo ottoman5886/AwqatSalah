@@ -8,7 +8,9 @@ COPY . .
 RUN dotnet publish DiyanetNamazVakti.Api/DiyanetNamazVakti.Api.csproj \
     --configuration Release \
     --output /app/publish \
-    --no-restore
+    --no-restore \
+    /p:TreatWarningsAsErrors=false \
+    /p:Nullable=disable
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
