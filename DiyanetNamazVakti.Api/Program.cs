@@ -1,4 +1,5 @@
 using Asp.Versioning.ApiExplorer;
+using DiyanetNamazVakti.Api.WebCommon.ActionFilters;
 using DiyanetNamazVakti.Api.WebCommon.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
