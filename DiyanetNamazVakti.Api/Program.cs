@@ -57,17 +57,10 @@ builder.Services.ConfigureSwagger();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    var apiVersionDescriptionProvider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
-    app.UseSwagger(apiVersionDescriptionProvider);
-    //app.UseSwaggerUI();
-}
-else
-{
-    //  If you want to see the error details in the "Production" environment, close here. (Not recommended!)
-    app.UseMiddleware<ExceptionMiddleware>();
-}
+var apiVersionDescriptionProvider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
+app.UseSwagger(apiVersionDescriptionProvider);
+
+app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseCors();
 
