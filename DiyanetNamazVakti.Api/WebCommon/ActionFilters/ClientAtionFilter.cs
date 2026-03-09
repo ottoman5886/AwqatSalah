@@ -17,13 +17,13 @@ public class ClientAtionFilter : IAsyncActionFilter
 
         // TODO Please do this check from database
         #region UserName and SecretCode Check
-        var myCustomHeader = headers.FirstOrDefault(x => x.Key == "UserName");
+        var myCustomHeader = headers.FirstOrDefault(x => x.Key.Equals("UserName", StringComparison.OrdinalIgnoreCase));
         var isAuthHorize = false;
         if (!string.IsNullOrEmpty(myCustomHeader.Key))
         {
             isAuthHorize = myCustomHeader.Value == _myApiClientSettings.UserName;
         }
-        myCustomHeader = headers.FirstOrDefault(x => x.Key == "SecretCode");
+        myCustomHeader = headers.FirstOrDefault(x => x.Key.Equals("SecretCode", StringComparison.OrdinalIgnoreCase));
         if (isAuthHorize && !string.IsNullOrEmpty(myCustomHeader.Key))
         {
             isAuthHorize = myCustomHeader.Value == _myApiClientSettings.SecretCode;
