@@ -26,6 +26,20 @@ public class AwqatSalahController : ControllerBase
             k.Key.Equals(apiKey, StringComparison.Ordinal) && k.IsAdmin);
     }
 
+    [HttpPost("WarmCache/{cityId}")]
+    public async Task<ActionResult> WarmCache(int cityId)
+    {
+        if (!IsAdminRequest())
+            return StatusCode(403, new { success = false, message = "Nur für Admins erlaubt." });
+
+        var success = await _awqatSalahService.WarmCacheAsync(cityId);
+
+        if (success)
+            return Ok(new { success = true, message = $"Jahres-Cache für Stadt {cityId} erfolgreich aufgebaut." });
+        else
+            return StatusCode(500, new { success = false, message = $"Fehler beim Aufbau des Caches für Stadt {cityId}." });
+    }
+
     [HttpGet("Daily/{cityId}")]
     public async Task<ActionResult<IResult>> AwqatSalahDaily(int cityId, [FromQuery] bool refresh = false)
     {
