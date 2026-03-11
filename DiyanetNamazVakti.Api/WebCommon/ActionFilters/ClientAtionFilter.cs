@@ -7,6 +7,11 @@ public class ClientAtionFilter : IAsyncActionFilter
 {
     private readonly IMyApiClientSettings _myApiClientSettings;
 
+    private static readonly string[] PublicEndpoints = new[]
+    {
+        "/health"
+    };
+
     public ClientAtionFilter(IMyApiClientSettings myApiClientSettings)
     {
         _myApiClientSettings = myApiClientSettings;
@@ -14,8 +19,15 @@ public class ClientAtionFilter : IAsyncActionFilter
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        var headers = context.HttpContext.Request.Headers;
+        var path = context.HttpContext.Request.Path.Value?.ToLower() ?? "";
 
+        if (PublicEndpoints.Any(e => path.StartsWith(e)))
+        {
+            await next();
+            return;
+        }
+
+        var headers = context.HttpContext.Request.Headers;
         var apiKeyHeader = headers.FirstOrDefault(x =>
             x.Key.Equals("X-API-Key", StringComparison.OrdinalIgnoreCase));
 
