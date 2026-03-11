@@ -28,10 +28,54 @@ public class AwqatSalahService : IAwqatSalahService
     }
 
     // ────────────────────────────────────────
-    // Kern: Jahres-Cache mit Fallback-Kette
+    // Admin: Jahres-Cache manuell aufbauen
     // ────────────────────────────────────────
 
-    private async Task<List<AwqatSalahModel>> GetOrFetchYearly(int cityId, bool refresh = false)
+    public async Task<bool> WarmCacheAsync(int cityId)
+    {
+        var yearlyKey = $"{YearlyCachePrefix}{cityId}_{DateTime.Now.Year}";
+        var staleKey = $"{StalePrefix}{cityId}";
+        var yearEnd = new DateTime(DateTime.Now.Year, 12, 31).ResetTimeToEndOfDay();
+
+        try
+        {
+            _logger.LogInformation("[WarmCache] Starte DateRange für Stadt {CityId}", cityId);
+
+            var yearly = await _awqatSalahApiService.CallService<List<AwqatSalahModel>>(
+                "/api/PrayerTime/DateRange",
+                MethodOption.Post,
+                new DateRangeFilter
+                {
+                    CityId = cityId,
+                    StartDate = new DateTime(DateTime.Now.Year, 1, 1),
+                    EndDate = new DateTime(DateTime.Now.Year, 12, 31)
+                },
+                new CancellationToken());
+
+            if (yearly != null && yearly.Count > 0)
+            {
+                _cacheService.Remove(yearlyKey);
+                await _cacheService.GetOrCreateAsync(yearlyKey, () => Task.FromResult(yearly), yearEnd);
+                await _cacheService.GetOrCreateAsync(staleKey, () => Task.FromResult(yearly), yearEnd.AddMonths(2));
+                _logger.LogInformation("[WarmCache] Erfolgreich für Stadt {CityId}, {Count} Einträge", cityId, yearly.Count);
+                return true;
+            }
+
+            _logger.LogWarning("[WarmCache] Keine Daten von Diyanet für Stadt {CityId}", cityId);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[WarmCache] Fehler für Stadt {CityId}", cityId);
+            return false;
+        }
+    }
+
+    // ────────────────────────────────────────
+    // Kern: Cache-Kette (KEIN automatischer DateRange!)
+    // ────────────────────────────────────────
+
+    private async Task<List<AwqatSalahModel>> GetOrFetchData(int cityId, bool refresh = false)
     {
         var yearlyKey  = $"{YearlyCachePrefix}{cityId}_{DateTime.Now.Year}";
         var monthlyKey = $"{MonthlyCachePrefix}{cityId}_{DateTime.Now.Year}_{DateTime.Now.Month}";
@@ -50,58 +94,30 @@ public class AwqatSalahService : IAwqatSalahService
         var weekEnd  = DateTime.Now.Date.AddDays(7);
 
         // ── Schritt 1: Jahres-Cache prüfen ──
-        if (_cacheService.Any(yearlyKey) && !refresh)
+        if (_cacheService.Any(yearlyKey))
         {
-            _logger.LogInformation("[Fallback] Jahres-Cache Treffer für Stadt {CityId}", cityId);
+            _logger.LogInformation("[Cache] Jahres-Cache Treffer für Stadt {CityId}", cityId);
             return await _cacheService.GetOrCreateAsync<List<AwqatSalahModel>>(yearlyKey, null!, yearEnd);
         }
 
-        // ── Schritt 2: DateRange bei Diyanet versuchen ──
-        try
-        {
-            _logger.LogInformation("[Fallback] Versuche DateRange für Stadt {CityId}", cityId);
-            var yearly = await _awqatSalahApiService.CallService<List<AwqatSalahModel>>(
-                "/api/PrayerTime/DateRange",
-                MethodOption.Post,
-                new DateRangeFilter
-                {
-                    CityId = cityId,
-                    StartDate = new DateTime(DateTime.Now.Year, 1, 1),
-                    EndDate = new DateTime(DateTime.Now.Year, 12, 31)
-                },
-                new CancellationToken());
-
-            if (yearly != null && yearly.Count > 0)
-            {
-                _logger.LogInformation("[Fallback] DateRange erfolgreich für Stadt {CityId}", cityId);
-                await _cacheService.GetOrCreateAsync(yearlyKey, () => Task.FromResult(yearly), yearEnd);
-                await _cacheService.GetOrCreateAsync(staleKey, () => Task.FromResult(yearly), yearEnd.AddMonths(2));
-                return yearly;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "[Fallback] DateRange fehlgeschlagen für Stadt {CityId}", cityId);
-        }
-
-        // ── Schritt 3: Monats-Cache prüfen ──
+        // ── Schritt 2: Monats-Cache prüfen ──
         if (_cacheService.Any(monthlyKey))
         {
-            _logger.LogInformation("[Fallback] Monats-Cache Treffer für Stadt {CityId}", cityId);
+            _logger.LogInformation("[Cache] Monats-Cache Treffer für Stadt {CityId}", cityId);
             return await _cacheService.GetOrCreateAsync<List<AwqatSalahModel>>(monthlyKey, null!, monthEnd);
         }
 
-        // ── Schritt 4: Monthly bei Diyanet versuchen ──
+        // ── Schritt 3: Monthly bei Diyanet laden (5/Tag, sicher) ──
         try
         {
-            _logger.LogInformation("[Fallback] Versuche Monthly für Stadt {CityId}", cityId);
+            _logger.LogInformation("[Cache] Lade Monthly von Diyanet für Stadt {CityId}", cityId);
             var monthly = await _awqatSalahApiService.CallService<List<AwqatSalahModel>>(
                 "/api/PrayerTime/Monthly/" + cityId,
                 MethodOption.Get, null, new CancellationToken());
 
             if (monthly != null && monthly.Count > 0)
             {
-                _logger.LogInformation("[Fallback] Monthly erfolgreich für Stadt {CityId}", cityId);
+                _logger.LogInformation("[Cache] Monthly erfolgreich für Stadt {CityId}", cityId);
                 await _cacheService.GetOrCreateAsync(monthlyKey, () => Task.FromResult(monthly), monthEnd);
                 await _cacheService.GetOrCreateAsync(staleKey, () => Task.FromResult(monthly), monthEnd.AddMonths(2));
                 return monthly;
@@ -109,27 +125,27 @@ public class AwqatSalahService : IAwqatSalahService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "[Fallback] Monthly fehlgeschlagen für Stadt {CityId}", cityId);
+            _logger.LogWarning(ex, "[Cache] Monthly fehlgeschlagen für Stadt {CityId}", cityId);
         }
 
-        // ── Schritt 5: Wochen-Cache prüfen ──
+        // ── Schritt 4: Wochen-Cache prüfen ──
         if (_cacheService.Any(weeklyKey))
         {
-            _logger.LogInformation("[Fallback] Wochen-Cache Treffer für Stadt {CityId}", cityId);
+            _logger.LogInformation("[Cache] Wochen-Cache Treffer für Stadt {CityId}", cityId);
             return await _cacheService.GetOrCreateAsync<List<AwqatSalahModel>>(weeklyKey, null!, weekEnd);
         }
 
-        // ── Schritt 6: Weekly bei Diyanet versuchen ──
+        // ── Schritt 5: Weekly bei Diyanet laden ──
         try
         {
-            _logger.LogInformation("[Fallback] Versuche Weekly für Stadt {CityId}", cityId);
+            _logger.LogInformation("[Cache] Lade Weekly von Diyanet für Stadt {CityId}", cityId);
             var weekly = await _awqatSalahApiService.CallService<List<AwqatSalahModel>>(
                 "/api/PrayerTime/Weekly/" + cityId,
                 MethodOption.Get, null, new CancellationToken());
 
             if (weekly != null && weekly.Count > 0)
             {
-                _logger.LogInformation("[Fallback] Weekly erfolgreich für Stadt {CityId}", cityId);
+                _logger.LogInformation("[Cache] Weekly erfolgreich für Stadt {CityId}", cityId);
                 await _cacheService.GetOrCreateAsync(weeklyKey, () => Task.FromResult(weekly), weekEnd);
                 await _cacheService.GetOrCreateAsync(staleKey, () => Task.FromResult(weekly), DateTime.Now.AddDays(14));
                 return weekly;
@@ -137,18 +153,18 @@ public class AwqatSalahService : IAwqatSalahService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "[Fallback] Weekly fehlgeschlagen für Stadt {CityId}", cityId);
+            _logger.LogWarning(ex, "[Cache] Weekly fehlgeschlagen für Stadt {CityId}", cityId);
         }
 
-        // ── Schritt 7: Letzten bekannten Cache zurückgeben (Stale) ──
+        // ── Schritt 6: Stale Cache zurückgeben ──
         if (_cacheService.Any(staleKey))
         {
-            _logger.LogWarning("[Fallback] Alle Diyanet-Anfragen fehlgeschlagen. Gebe veraltete Daten zurück für Stadt {CityId}", cityId);
+            _logger.LogWarning("[Cache] Alle Diyanet-Anfragen fehlgeschlagen. Veraltete Daten für Stadt {CityId}", cityId);
             return await _cacheService.GetOrCreateAsync<List<AwqatSalahModel>>(staleKey, null!, DateTime.Now.AddMonths(2));
         }
 
-        // ── Schritt 8: Komplett kein Fallback möglich ──
-        _logger.LogError("[Fallback] Kein Cache und Diyanet nicht erreichbar für Stadt {CityId}", cityId);
+        // ── Schritt 7: Kein Fallback möglich ──
+        _logger.LogError("[Cache] Kein Cache und Diyanet nicht erreichbar für Stadt {CityId}", cityId);
         return null;
     }
 
@@ -158,11 +174,11 @@ public class AwqatSalahService : IAwqatSalahService
 
     public async Task<List<AwqatSalahModel>> DailyAwqatSalah(int cityId, bool refresh = false)
     {
-        var yearly = await GetOrFetchYearly(cityId, refresh);
-        if (yearly is null) return null;
+        var data = await GetOrFetchData(cityId, refresh);
+        if (data is null) return null;
 
         var today = DateTime.Now.ToString("dd.MM.yyyy");
-        return yearly
+        return data
             .Where(x => x.GregorianDateShort == today)
             .ToList();
     }
@@ -173,13 +189,13 @@ public class AwqatSalahService : IAwqatSalahService
 
     public async Task<List<AwqatSalahModel>> WeeklyAwqatSalah(int cityId, bool refresh = false)
     {
-        var yearly = await GetOrFetchYearly(cityId, refresh);
-        if (yearly is null) return null;
+        var data = await GetOrFetchData(cityId, refresh);
+        if (data is null) return null;
 
         var today = DateTime.Now.Date;
         var endOfWeek = today.AddDays(7);
 
-        return yearly
+        return data
             .Where(x =>
             {
                 if (DateTime.TryParseExact(x.GregorianDateShort, "dd.MM.yyyy",
@@ -196,13 +212,13 @@ public class AwqatSalahService : IAwqatSalahService
 
     public async Task<List<AwqatSalahModel>> MonthlyAwqatSalah(int cityId, bool refresh = false)
     {
-        var yearly = await GetOrFetchYearly(cityId, refresh);
-        if (yearly is null) return null;
+        var data = await GetOrFetchData(cityId, refresh);
+        if (data is null) return null;
 
         var today = DateTime.Now.Date;
         var endOfMonth = today.AddDays(30);
 
-        return yearly
+        return data
             .Where(x =>
             {
                 if (DateTime.TryParseExact(x.GregorianDateShort, "dd.MM.yyyy",
@@ -214,7 +230,7 @@ public class AwqatSalahService : IAwqatSalahService
     }
 
     // ────────────────────────────────────────
-    // Yearly → direkt
+    // Yearly → aus Cache (kein automatischer DateRange!)
     // ────────────────────────────────────────
 
     public async Task<List<AwqatSalahModel>> YearlyAwqatSalah(DateRangeFilter dateRange, bool refresh = false)
@@ -222,7 +238,7 @@ public class AwqatSalahService : IAwqatSalahService
         if (dateRange.StartDate > dateRange.EndDate)
             throw new InvalidTransactionException(Dictionary.StartDateNotAvailable);
 
-        return await GetOrFetchYearly(dateRange.CityId, refresh);
+        return await GetOrFetchData(dateRange.CityId, refresh);
     }
 
     // ────────────────────────────────────────
