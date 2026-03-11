@@ -66,7 +66,7 @@ public class AwqatSalahService : IAwqatSalahService
     }
 
     // ────────────────────────────────────────
-    // Weekly → heute bis Ende der Woche
+    // Weekly → heute + 7 Tage
     // ────────────────────────────────────────
 
     public async Task<List<AwqatSalahModel>> WeeklyAwqatSalah(int cityId, bool refresh = false)
@@ -75,7 +75,7 @@ public class AwqatSalahService : IAwqatSalahService
         if (yearly is null) return null;
 
         var today = DateTime.Now.Date;
-        var endOfWeek = today.AddDays(7 - (int)today.DayOfWeek);
+        var endOfWeek = today.AddDays(7);
 
         return yearly
             .Where(x =>
@@ -89,7 +89,7 @@ public class AwqatSalahService : IAwqatSalahService
     }
 
     // ────────────────────────────────────────
-    // Monthly → heute bis Ende des Monats
+    // Monthly → heute + 30 Tage
     // ────────────────────────────────────────
 
     public async Task<List<AwqatSalahModel>> MonthlyAwqatSalah(int cityId, bool refresh = false)
@@ -98,14 +98,14 @@ public class AwqatSalahService : IAwqatSalahService
         if (yearly is null) return null;
 
         var today = DateTime.Now.Date;
-        var currentMonth = DateTime.Now.Month;
+        var endOfMonth = today.AddDays(30);
 
         return yearly
             .Where(x =>
             {
                 if (DateTime.TryParseExact(x.GregorianDateShort, "dd.MM.yyyy",
                     null, System.Globalization.DateTimeStyles.None, out var date))
-                    return date >= today && date.Month == currentMonth;
+                    return date >= today && date <= endOfMonth;
                 return false;
             })
             .ToList();
