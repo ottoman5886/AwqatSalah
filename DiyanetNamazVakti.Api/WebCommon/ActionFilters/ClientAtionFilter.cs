@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.Filters;
+using DiyanetNamazVakti.Api.Core.Settings;
 
 namespace DiyanetNamazVakti.Api.WebCommon.ActionFilters;
 
@@ -15,24 +16,16 @@ public class ClientAtionFilter : IAsyncActionFilter
     {
         var headers = context.HttpContext.Request.Headers;
 
-        // TODO Please do this check from database
-        #region UserName and SecretCode Check
-        var myCustomHeader = headers.FirstOrDefault(x => x.Key.Equals("UserName", StringComparison.OrdinalIgnoreCase));
-        var isAuthHorize = false;
-        if (!string.IsNullOrEmpty(myCustomHeader.Key))
-        {
-            isAuthHorize = myCustomHeader.Value == _myApiClientSettings.UserName;
-        }
-        myCustomHeader = headers.FirstOrDefault(x => x.Key.Equals("SecretCode", StringComparison.OrdinalIgnoreCase));
-        if (isAuthHorize && !string.IsNullOrEmpty(myCustomHeader.Key))
-        {
-            isAuthHorize = myCustomHeader.Value == _myApiClientSettings.SecretCode;
-        }
-        #endregion
-        if (isAuthHorize)
+        var apiKeyHeader = headers.FirstOrDefault(x =>
+            x.Key.Equals("X-API-Key", StringComparison.OrdinalIgnoreCase));
+
+        var isAuthorized = !string.IsNullOrEmpty(apiKeyHeader.Key) &&
+            _myApiClientSettings.ApiKeys.Any(k =>
+                k.Key.Equals(apiKeyHeader.Value.ToString(), StringComparison.Ordinal));
+
+        if (isAuthorized)
             await next();
         else
             throw new BadHttpRequestException(string.Format(Dictionary.AccessDenied));
-
     }
 }
