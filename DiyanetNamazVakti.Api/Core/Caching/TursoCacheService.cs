@@ -17,7 +17,6 @@ public class TursoCacheService : ICacheService
     private readonly string _baseUrl;
     private bool _tursoAvailable = true;
 
-    // Memory Fallback
     private readonly ConcurrentDictionary<string, (string Value, DateTime ExpiresAt)> _memoryCache = new();
 
     public TursoCacheService(ICacheSettings cacheSettings, ILogger<TursoCacheService> logger, IConfiguration configuration)
@@ -247,7 +246,7 @@ public class TursoCacheService : ICacheService
         response.EnsureSuccessStatusCode();
     }
 
-    private async Task<object?> ExecuteScalar(string sql, params object[] args)
+    private async Task<object> ExecuteScalar(string sql, params object[] args)
     {
         var body = BuildRequest(sql, args);
         var response = await _httpClient.PostAsync($"{_baseUrl}/v2/pipeline", body);
@@ -299,36 +298,37 @@ public class TursoCacheService : ICacheService
         return keys;
     }
 
-private StringContent BuildRequest(string sql, params object[] args)
-{
-    var arguments = args.Select(a => new Dictionary<string, string>
+    private StringContent BuildRequest(string sql, params object[] args)
     {
-        { "type", "text" },
-        { "value", a?.ToString() ?? "" }
-    }).ToArray();
-
-    var payload = new Dictionary<string, object>
-    {
+        var arguments = args.Select(a => new Dictionary<string, string>
         {
-            "requests", new object[]
+            { "type", "text" },
+            { "value", a?.ToString() ?? "" }
+        }).ToArray();
+
+        var payload = new Dictionary<string, object>
+        {
             {
-                new Dictionary<string, object>
+                "requests", new object[]
                 {
-                    { "type", "execute" },
-                    { "stmt", new Dictionary<string, object>
-                        {
-                            { "sql", sql },
-                            { "args", arguments }
+                    new Dictionary<string, object>
+                    {
+                        { "type", "execute" },
+                        { "stmt", new Dictionary<string, object>
+                            {
+                                { "sql", sql },
+                                { "args", arguments }
+                            }
                         }
+                    },
+                    new Dictionary<string, string>
+                    {
+                        { "type", "close" }
                     }
-                },
-                new Dictionary<string, string>
-                {
-                    { "type", "close" }
                 }
             }
-        }
-    };
+        };
 
-    return new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        return new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+    }
 }
