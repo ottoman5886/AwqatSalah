@@ -299,21 +299,36 @@ public class TursoCacheService : ICacheService
         return keys;
     }
 
-    private StringContent BuildRequest(string sql, params object[] args)
+private StringContent BuildRequest(string sql, params object[] args)
+{
+    var arguments = args.Select(a => new Dictionary<string, string>
     {
-        var arguments = args.Select(a => new { type = "text", value = a?.ToString() ?? "" }).ToArray();
-        var payload = new
+        { "type", "text" },
+        { "value", a?.ToString() ?? "" }
+    }).ToArray();
+
+    var payload = new Dictionary<string, object>
+    {
         {
-            requests = new[]
+            "requests", new object[]
             {
-                new
+                new Dictionary<string, object>
                 {
-                    type = "execute",
-                    stmt = new { sql, args = arguments }
+                    { "type", "execute" },
+                    { "stmt", new Dictionary<string, object>
+                        {
+                            { "sql", sql },
+                            { "args", arguments }
+                        }
+                    }
                 },
-                new { type = "close" }
+                new Dictionary<string, string>
+                {
+                    { "type", "close" }
+                }
             }
-        };
-        return new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-    }
+        }
+    };
+
+    return new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 }
