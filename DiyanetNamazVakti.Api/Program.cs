@@ -21,7 +21,7 @@ builder.Services.AddSingleton<IMyApiClientSettings>(sp => sp.GetRequiredService<
 builder.Services.Configure<CacheSettings>(builder.Configuration.GetSection(nameof(CacheSettings)));
 builder.Services.AddSingleton<ICacheSettings>(sp => sp.GetRequiredService<IOptions<CacheSettings>>().Value);
 builder.Services.AddSingleton<IMemoryCache, MemoryCache>();
-builder.Services.AddSingleton<ICacheService, MemoryCacheService>();
+builder.Services.AddSingleton<ICacheService, SqliteCacheService>();
 
 //Api Call Service Dependence
 builder.Services.AddScoped<IAwqatSalahConnectService, AwqatSalahApiService>();
