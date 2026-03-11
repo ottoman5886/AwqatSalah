@@ -9,7 +9,6 @@ public class AwqatSalahService : IAwqatSalahService
     private readonly ICacheService _cacheService;
     private readonly IAwqatSalahConnectService _awqatSalahApiService;
 
-    // Cache Key Prefix für Jahres-Daten
     private const string YearlyCachePrefix = "smartcache_yearly_";
 
     public AwqatSalahService(IAwqatSalahSettings namazVaktiSettings, ICacheService cacheService, IAwqatSalahConnectService awqatSalahApiService)
@@ -27,7 +26,6 @@ public class AwqatSalahService : IAwqatSalahService
     {
         var cacheKey = $"{YearlyCachePrefix}{cityId}_{DateTime.Now.Year}";
 
-        // Bypass: Cache löschen damit frisch von Diyanet geladen wird
         if (refresh)
             _cacheService.Remove(cacheKey);
 
@@ -53,7 +51,7 @@ public class AwqatSalahService : IAwqatSalahService
     }
 
     // ────────────────────────────────────────
-    // Daily → aus Jahres-Cache filtern
+    // Daily → heute aus Jahres-Cache
     // ────────────────────────────────────────
 
     public async Task<List<AwqatSalahModel>> DailyAwqatSalah(int cityId, bool refresh = false)
@@ -68,7 +66,7 @@ public class AwqatSalahService : IAwqatSalahService
     }
 
     // ────────────────────────────────────────
-    // Weekly → aus Jahres-Cache filtern
+    // Weekly → heute bis Ende der Woche
     // ────────────────────────────────────────
 
     public async Task<List<AwqatSalahModel>> WeeklyAwqatSalah(int cityId, bool refresh = false)
@@ -76,22 +74,22 @@ public class AwqatSalahService : IAwqatSalahService
         var yearly = await GetOrFetchYearly(cityId, refresh);
         if (yearly is null) return null;
 
-        var startOfWeek = DateTime.Now.Date.AddDays(-(int)DateTime.Now.DayOfWeek + 1);
-        var endOfWeek = startOfWeek.AddDays(6);
+        var today = DateTime.Now.Date;
+        var endOfWeek = today.AddDays(7 - (int)today.DayOfWeek);
 
         return yearly
             .Where(x =>
             {
                 if (DateTime.TryParseExact(x.GregorianDateShort, "dd.MM.yyyy",
                     null, System.Globalization.DateTimeStyles.None, out var date))
-                    return date >= startOfWeek && date <= endOfWeek;
+                    return date >= today && date <= endOfWeek;
                 return false;
             })
             .ToList();
     }
 
     // ────────────────────────────────────────
-    // Monthly → aus Jahres-Cache filtern
+    // Monthly → heute bis Ende des Monats
     // ────────────────────────────────────────
 
     public async Task<List<AwqatSalahModel>> MonthlyAwqatSalah(int cityId, bool refresh = false)
@@ -99,6 +97,7 @@ public class AwqatSalahService : IAwqatSalahService
         var yearly = await GetOrFetchYearly(cityId, refresh);
         if (yearly is null) return null;
 
+        var today = DateTime.Now.Date;
         var currentMonth = DateTime.Now.Month;
 
         return yearly
@@ -106,7 +105,7 @@ public class AwqatSalahService : IAwqatSalahService
             {
                 if (DateTime.TryParseExact(x.GregorianDateShort, "dd.MM.yyyy",
                     null, System.Globalization.DateTimeStyles.None, out var date))
-                    return date.Month == currentMonth;
+                    return date >= today && date.Month == currentMonth;
                 return false;
             })
             .ToList();
