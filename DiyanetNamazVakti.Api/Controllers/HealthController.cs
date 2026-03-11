@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace DiyanetNamazVakti.Api.Controllers;
 
 [Route("[controller]")]
 [ApiController]
+[DisableRateLimiting]
 public class HealthController : ControllerBase
 {
     private readonly ICacheService _cacheService;
