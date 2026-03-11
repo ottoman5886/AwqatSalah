@@ -1,4 +1,4 @@
-﻿using Asp.Versioning.ApiExplorer;
+using Asp.Versioning.ApiExplorer;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
@@ -11,29 +11,27 @@ public static class ConfigureSwaggerExtension
         services.AddSwaggerGen(c =>
         {
             c.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
-            c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            c.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme
             {
-                Description = "JWT containing userid claim",
-                Name = "Authorization",
+                Description = "API Key als Header: X-API-Key: {dein-key}",
+                Name = "X-API-Key",
                 In = ParameterLocation.Header,
                 Type = SecuritySchemeType.ApiKey,
             });
-
             c.AddSecurityRequirement(new OpenApiSecurityRequirement {
-        {
-            new OpenApiSecurityScheme
             {
-                Reference = new OpenApiReference {
-                    Id = "Bearer",
-                    Type = ReferenceType.SecurityScheme
-                },
-                UnresolvedReference = true
-            }, new List<string>() }
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference {
+                        Id = "ApiKey",
+                        Type = ReferenceType.SecurityScheme
+                    },
+                    UnresolvedReference = true
+                }, new List<string>()
+            }
+            });
         });
-        });
-
         services.ConfigureOptions<ConfigureSwaggerOptions>();
-
         return services;
     }
 
@@ -47,7 +45,6 @@ public static class ConfigureSwaggerExtension
                 options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
             }
         });
-
         return app;
     }
 
@@ -60,34 +57,19 @@ public static class ConfigureSwaggerExtension
             _provider = provider;
         }
 
-        /// <summary>
-        /// Configure each API discovered for Swagger Documentation
-        /// </summary>
-        /// <param name="options"></param>
         public void Configure(SwaggerGenOptions options)
         {
-            // add swagger document for every API version discovered
             foreach (var description in _provider.ApiVersionDescriptions)
             {
                 options.SwaggerDoc(description.GroupName, CreateVersionInfo(description));
             }
         }
 
-        /// <summary>
-        /// Configure Swagger Options. Inherited from the Interface
-        /// </summary>
-        /// <param name="name"></param>
-        /// <param name="options"></param>
         public void Configure(string name, SwaggerGenOptions options)
         {
             Configure(options);
         }
 
-        /// <summary>
-        /// Create information about the version of the API
-        /// </summary>
-        /// <param name="description"></param>
-        /// <returns>Information about the API</returns>
         private OpenApiInfo CreateVersionInfo(ApiVersionDescription desc)
         {
             var info = new OpenApiInfo()
@@ -95,12 +77,10 @@ public static class ConfigureSwaggerExtension
                 Title = "AwqatSalah - Diyanet Namaz Vakti Api",
                 Version = desc.ApiVersion.ToString()
             };
-
             if (desc.IsDeprecated)
             {
                 info.Description += " This API version has been deprecated. Please use one of the new APIs available from the explorer.";
             }
-
             return info;
         }
     }
