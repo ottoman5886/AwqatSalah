@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using PrayerTime.Service.Models;
+
 namespace DiyanetNamazVakti.Api.Controllers;
+
 [Route("api/[controller]")]
 [ApiController]
 public class AwqatSalahController : ControllerBase
@@ -17,9 +19,11 @@ public class AwqatSalahController : ControllerBase
     private bool IsAdminRequest()
     {
         var headers = HttpContext.Request.Headers;
-        var adminName = headers.FirstOrDefault(x => x.Key.Equals("AdminName", StringComparison.OrdinalIgnoreCase)).Value.ToString();
-        var adminCode = headers.FirstOrDefault(x => x.Key.Equals("AdminCode", StringComparison.OrdinalIgnoreCase)).Value.ToString();
-        return adminName == _myApiClientSettings.AdminName && adminCode == _myApiClientSettings.AdminCode;
+        var apiKey = headers.FirstOrDefault(x =>
+            x.Key.Equals("X-API-Key", StringComparison.OrdinalIgnoreCase)).Value.ToString();
+
+        return _myApiClientSettings.ApiKeys.Any(k =>
+            k.Key.Equals(apiKey, StringComparison.Ordinal) && k.IsAdmin);
     }
 
     [HttpGet("Daily/{cityId}")]
@@ -27,7 +31,6 @@ public class AwqatSalahController : ControllerBase
     {
         if (refresh && !IsAdminRequest())
             return StatusCode(403, new { success = false, message = "Refresh nur für Admins erlaubt." });
-
         return new SuccessDataResult<List<AwqatSalahModel>>(await _awqatSalahService.DailyAwqatSalah(cityId, refresh));
     }
 
@@ -36,7 +39,6 @@ public class AwqatSalahController : ControllerBase
     {
         if (refresh && !IsAdminRequest())
             return StatusCode(403, new { success = false, message = "Refresh nur für Admins erlaubt." });
-
         return new SuccessDataResult<List<AwqatSalahModel>>(await _awqatSalahService.WeeklyAwqatSalah(cityId, refresh));
     }
 
@@ -45,7 +47,6 @@ public class AwqatSalahController : ControllerBase
     {
         if (refresh && !IsAdminRequest())
             return StatusCode(403, new { success = false, message = "Refresh nur für Admins erlaubt." });
-
         return new SuccessDataResult<List<AwqatSalahModel>>(await _awqatSalahService.MonthlyAwqatSalah(cityId, refresh));
     }
 
@@ -54,7 +55,6 @@ public class AwqatSalahController : ControllerBase
     {
         if (refresh && !IsAdminRequest())
             return StatusCode(403, new { success = false, message = "Refresh nur für Admins erlaubt." });
-
         return new SuccessDataResult<List<AwqatSalahModel>>(await _awqatSalahService.YearlyAwqatSalah(filter, refresh));
     }
 
