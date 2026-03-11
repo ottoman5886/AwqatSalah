@@ -49,7 +49,7 @@ public class AwqatSalahService : IAwqatSalahService
 
         var cacheKey = MethodBase.GetCurrentMethod()!.DeclaringType!.FullName! + "." + dateRange.CityId + "." + dateRange.StartDate.ToShortDateString() + "." + dateRange.EndDate.ToShortDateString();
         var result = await _cacheService.GetOrCreateAsync(cacheKey,
-            async () => await _awqatSalahApiService.CallService<List<AwqatSalahModel>>("/api/AwqatSalah/DateRange",
+            async () => await _awqatSalahApiService.CallService<List<AwqatSalahModel>>("/api/PrayerTime/DateRange",
                    MethodOption.Post, dateRange, new CancellationToken()),
         dateRange.EndDate.ResetTimeToEndOfDay());
 
