@@ -19,6 +19,7 @@ public class HealthController : ControllerBase
 
     [HttpGet]
     [HttpPost]
+    [HttpHead]
     public ActionResult Get()
     {
         var isAdmin = false;
