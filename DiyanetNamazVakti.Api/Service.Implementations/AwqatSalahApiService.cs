@@ -45,31 +45,50 @@ public class AwqatSalahApiService : IAwqatSalahConnectService
     }
 
     private async Task AddToken(CancellationToken cancellationToken)
+{
+    var token = await _cacheService.GetOrCreateAsync(
+        nameof(CacheNameConstants.TokenCacheName),
+        async () => await AwqatSalahLogin(cancellationToken),
+        DateTime.Now.AddMinutes(_tokenLifeTimeMinutes));
+
+    if (!_client.DefaultRequestHeaders.Contains("Authorization"))
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+    if (token.ExpireTime <= DateTime.Now)
     {
-        var token = await _cacheService.GetOrCreateAsync(nameof(CacheNameConstants.TokenCacheName), async () => await AwqatSalahLogin(cancellationToken), DateTime.Now.AddMinutes(_tokenLifeTimeMinutes));
+        _cacheService.Remove(nameof(CacheNameConstants.TokenCacheName));
+        _cacheService.Remove(CacheNameConstants.TokenCacheName);
 
-        if (!_client.DefaultRequestHeaders.Contains("Authorization"))
+        if ((DateTime.Now - token.ExpireTime).TotalMinutes < _awqatSalahSettings.RefreshTokenLifetimeMinutes)
         {
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
-        }
-
-        if (token.ExpireTime <= DateTime.Now)
-        {
-            if ((DateTime.Now - token.ExpireTime).TotalMinutes < _awqatSalahSettings.RefreshTokenLifetimeMinutes)
+            try
             {
-                _cacheService.Remove(CacheNameConstants.TokenCacheName);
-                token = await _cacheService.GetOrCreateAsync(CacheNameConstants.TokenCacheName,
-                    async () => await AwqatSalahRefreshToken(token.RefreshToken, cancellationToken), DateTime.Now.AddMinutes(_tokenLifeTimeMinutes));
+                token = await _cacheService.GetOrCreateAsync(
+                    CacheNameConstants.TokenCacheName,
+                    async () => await AwqatSalahRefreshToken(token.RefreshToken, cancellationToken),
+                    DateTime.Now.AddMinutes(_tokenLifeTimeMinutes));
 
                 _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+                return;
             }
-            else
+            catch (Exception ex)
             {
+                // RefreshToken fehlgeschlagen → frischer Login
+                _cacheService.Remove(nameof(CacheNameConstants.TokenCacheName));
                 _cacheService.Remove(CacheNameConstants.TokenCacheName);
-                await AddToken(cancellationToken);
             }
         }
+
+        // Frischer Login
+        token = await AwqatSalahLogin(cancellationToken);
+        await _cacheService.GetOrCreateAsync(
+            nameof(CacheNameConstants.TokenCacheName),
+            () => Task.FromResult(token),
+            DateTime.Now.AddMinutes(_tokenLifeTimeMinutes));
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
     }
+}
 
     private async Task<TokenWithExpireModel> AwqatSalahLogin(CancellationToken cancellationToken)
     {
